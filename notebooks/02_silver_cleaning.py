@@ -59,6 +59,23 @@ def write_delta_overwrite(df, path: str):
 
 # COMMAND ----------
 
+# Facility_ID normalization
+def normalize_facility_id(df, col_name="facility_id", width=6):
+    return (
+        df
+        .withColumn(col_name, F.col(col_name).cast("string"))
+        # remove trailing .0 if present
+        .withColumn(col_name, F.regexp_replace(F.col(col_name), r"\.0$", ""))
+        # remove anything non-numeric just in case
+        .withColumn(col_name, F.regexp_replace(F.col(col_name), r"[^0-9]", ""))
+        # convert empty strings to null
+        .withColumn(col_name, F.when(F.length(F.col(col_name)) > 0, F.col(col_name)).otherwise(F.lit(None)))
+        # left-pad to 6 digits
+        .withColumn(col_name, F.when(F.col(col_name).isNotNull(), F.lpad(F.col(col_name), width, "0")).otherwise(F.lit(None)))
+    )
+
+# COMMAND ----------
+
 # Zipcode Normalization
 from pyspark.sql import functions as F
 
@@ -212,11 +229,9 @@ hrrp_bronze.columns
 
 # DBTITLE 1,HRRP Readmission
 # Cast ID/names to consistent types
-hrrp_silver = (
-  hrrp_bronze
-  .withColumn("facility_id", F.col("facility_id").cast("string"))
-  .withColumn("measure_name", F.trim(F.col("measure_name")))
-)
+hrrp_silver = hrrp_bronze
+hrrp_silver = normalize_facility_id(hrrp_silver, "facility_id")
+hrrp_silver = hrrp_silver.withColumn("measure_name", F.trim(F.col("measure_name")))
 
 # Convert to consistent types
 hrrp_silver = to_double(hrrp_silver, "excess_readmission_ratio")
@@ -260,7 +275,7 @@ hosp_bronze.columns
 # Standardize IDs and state codes
 hosp_silver = (
     hosp_bronze
-    .withColumn("facility_id", F.col("facility_id").cast("string"))
+    .transform(lambda df: normalize_facility_id(df, "facility_id"))
     .withColumn("state", F.upper(F.trim(F.col("state"))))
 )
 
@@ -290,7 +305,7 @@ mspb_bronze.columns
 # COMMAND ----------
 
 # Standardize facility IDs
-mspb_silver = mspb_bronze.withColumn("facility_id", F.col("facility_id").cast("string"))
+mspb_silver = normalize_facility_id(mspb_bronze, "facility_id")
 
 # Normalize ZIP for consistency across joins
 mspb_silver = normalize_zip(mspb_silver, "zip_code")
@@ -326,8 +341,11 @@ unplanned_bronze.columns
 # COMMAND ----------
 
 # Standardize facility IDs
-unplanned_visits_silver = unplanned_bronze.withColumn("facility_id", F.col("facility_id").cast("string")) \
-  .withColumn("measure_id", F.trim(F.col("measure_id")) if "measure_id" in unplanned_bronze.columns else F.lit(None))
+unplanned_visits_silver = (
+    unplanned_bronze
+    .transform(lambda df: normalize_facility_id(df, "facility_id"))
+    .withColumn("measure_id", F.trim(F.col("measure_id")))
+)
 
 # Normalize ZIP + cast numerics/dates
 unplanned_visits_silver = normalize_zip(unplanned_visits_silver, col_name=("zip_code"))
@@ -464,3 +482,52 @@ print("Silver Hospital:", read_delta(f"{SILVER}/hospital_info_clean").count())
 print("Silver MSPB:", read_delta(f"{SILVER}/mspb_clean").count())
 print("Silver Unplanned:", read_delta(f"{SILVER}/unplanned_visits_clean").count())
 print("Silver RUCA:", read_delta(f"{SILVER}/ruca_clean").count())
+
+# COMMAND ----------
+
+print("HRRP distinct facility_id:", hrrp_silver.select("facility_id").distinct().count())
+print("Hospital distinct facility_id:", hosp_silver.select("facility_id").distinct().count())
+print("MSPB distinct facility_id:", mspb_silver.select("facility_id").distinct().count())
+print("Unplanned distinct facility_id:", unplanned_visits_silver.select("facility_id").distinct().count())
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ##### Validation / Join Key Sanity Checks/ Debugging
+
+# COMMAND ----------
+
+display(hrrp_silver.select("facility_id").distinct().orderBy("facility_id").limit(10))
+display(hosp_silver.select("facility_id").distinct().orderBy("facility_id").limit(10))
+display(mspb_silver.select("facility_id").distinct().orderBy("facility_id").limit(10))
+display(unplanned_visits_silver.select("facility_id").distinct().orderBy("facility_id").limit(10))
+
+# COMMAND ----------
+
+hrrp_hosp_overlap = (
+    hrrp_silver.select("facility_id").distinct()
+    .join(hosp_silver.select("facility_id").distinct(), on="facility_id", how="inner")
+    .count()
+)
+
+print("HRRP ↔ Hospital overlap:", hrrp_hosp_overlap)
+
+# COMMAND ----------
+
+hrrp_mspb_overlap = (
+    hrrp_silver.select("facility_id").distinct()
+    .join(mspb_silver.select("facility_id").distinct(), on="facility_id", how="inner")
+    .count()
+)
+
+print("HRRP ↔ MSPB overlap:", hrrp_mspb_overlap)
+
+# COMMAND ----------
+
+hrrp_unplanned_overlap = (
+    hrrp_silver.select("facility_id").distinct()
+    .join(unplanned_visits_silver.select("facility_id").distinct(), on="facility_id", how="inner")
+    .count()
+)
+
+print("HRRP ↔ Unplanned overlap:", hrrp_unplanned_overlap)
