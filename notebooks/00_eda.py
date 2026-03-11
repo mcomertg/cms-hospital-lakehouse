@@ -105,7 +105,7 @@ display(
 numeric_cols = [(c, t) for c, t in gold_hosp.dtypes if t in ('int', 'double', 'bigint', 'float')]
 
 # 2. Print each numeric column's name and type
-for c in numeric_cols:
+for c, t in numeric_cols:
     print(f"Column: {c}, Type: {t}")
 
 # COMMAND ----------
@@ -172,7 +172,224 @@ display(
 
 # COMMAND ----------
 
+# rural summary for rural hospitals
+rural_summary = (
+    gold_ml.groupBy("ruca_bucket")
+    .agg(
+        F.count("*").alias("row_count"),
+        F.avg("excess_readmission_ratio").alias("avg_excess_readmission_ratio"),
+        F.avg("high_readmission_flag").alias("pct_high_readmission"),
+        F.avg("mspb_score").alias("avg_mspb_score"),
+        F.avg("total_unplanned_patients").alias("avg_total_unplanned_patients")
+    )
+    .orderBy(F.desc("avg_excess_readmission_ratio"))
+)
 
+rural_summary.display()
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC Key categorical breakdown
+
+# COMMAND ----------
+
+# Hospital type excess readmission ratio and pct high readmission summary
+display(
+    gold_ml.groupBy("hospital_type")
+    .agg(
+        F.count("*").alias("count"),
+        F.avg("excess_readmission_ratio").alias("avg_err"),
+        F.avg("high_readmission_flag").alias("pct_high_readmission")
+    )
+    .orderBy(F.desc("count"))
+)
+
+# COMMAND ----------
+
+# hospital ownership excess readmission ratio and pct high readmission summary
+display(
+    gold_ml.groupBy("hospital_ownership")
+    .agg(
+        F.count("*").alias("count"),
+        F.avg("excess_readmission_ratio").alias("avg_err"),
+        F.avg("high_readmission_flag").alias("pct_high_readmission")
+    )
+    .orderBy(F.desc("count"))
+)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC Feature distributions
+
+# COMMAND ----------
+
+display(gold_ml.select("excess_readmission_ratio"))
+display(gold_ml.select("mspb_score"))
+display(gold_ml.select("total_unplanned_patients"))
+
+# COMMAND ----------
+
+# Show the summary statistics for the selected columns
+display(
+    gold_ml.select("excess_readmission_ratio").describe()
+)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC Correlation analysis
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC Note: Not every hospital report measures such as HF, PN, AMI, etc. That's why the outcome variables may be missing by design and this is not a data quality but domain missingniss. Correlation analysis therefore uses pairwise available observations
+# MAGIC rather than dropping rows globally.
+# MAGIC
+# MAGIC We remove following features from correlation analysis;
+# MAGIC * Observed_readmission_rate -> 56% missing.
+# MAGIC * Ruca_bucket -> This is a geographic classification code, not a continuous measure.
+
+# COMMAND ----------
+
+# DBTITLE 1,Feature distributions null counts
+# Check for null values in the selected columns
+corr_cols = [
+    "number_of_discharges",
+    "number_of_readmissions",
+    "predicted_readmission_rate",
+    "expected_readmission_rate",
+    "excess_readmission_ratio",
+    "hospital_overall_rating",
+    "mspb_score",
+    "avg_unplanned_score",
+    "total_unplanned_patients",
+    "unplanned_return_rate",
+    "ruca_code",
+    "readmission_gap",
+    "observed_readmission_rate"
+]
+
+# Check null counts for each selected column
+corr_df = gold_hosp.select([
+    F.sum(F.col(c).isNull().cast("int")).alias(c) for c in corr_cols
+])
+display(corr_df)
+
+# COMMAND ----------
+
+# Correlation between excess readmission ratio and mspb score
+gold_hosp.stat.corr("excess_readmission_ratio", "mspb_score")
+
+# COMMAND ----------
+
+# Select columns for correlation analysis
+corr_cols = [
+    "number_of_discharges",
+    "number_of_readmissions",
+    "predicted_readmission_rate",
+    "expected_readmission_rate",
+    "excess_readmission_ratio",
+    "hospital_overall_rating",
+    "mspb_score",
+    "avg_unplanned_score",
+    "total_unplanned_patients",
+    "unplanned_return_rate",
+    "readmission_gap"
+]
+
+target = "excess_readmission_ratio"
+
+for c in corr_cols:
+    if c != target:
+        corr = gold_hosp.stat.corr(target, c)
+        print(f"{target} vs {c}: {corr}")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC Skewness for hospital variables
+
+# COMMAND ----------
+
+# DBTITLE 1,Skewness for gold_ml numeric features
+from pyspark.sql.functions import skewness
+
+gold_ml_skewness = gold_ml.select(
+    skewness("predicted_readmission_rate").alias("predicted_readmission_rate"),
+    skewness("expected_readmission_rate").alias("expected_readmission_rate"),
+    skewness("excess_readmission_ratio").alias("excess_readmission_ratio"),
+    skewness("hospital_overall_rating").alias("hospital_overall_rating"),
+    skewness("mspb_score").alias("mspb_score"),
+    skewness("avg_unplanned_score").alias("avg_unplanned_score"),
+    skewness("total_unplanned_patients").alias("total_unplanned_patients"),
+    skewness("unplanned_return_rate").alias("unplanned_return_rate"),
+    skewness("readmission_gap").alias("readmission_gap")
+)
+
+display(gold_ml_skewness)
+
+# COMMAND ----------
+
+gold_hosp.columns
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC Correlation analysis using pandas and seaborn - Heatmap 
+
+# COMMAND ----------
+
+# Select columns for correlation analysis
+corr_cols = [
+    "predicted_readmission_rate",
+    "expected_readmission_rate",
+    "excess_readmission_ratio",
+    "hospital_overall_rating",
+    "mspb_score",
+    "avg_unplanned_score",
+    "total_unplanned_patients",
+    "unplanned_return_rate",
+    "readmission_gap"
+]
+
+# Convert the Spark DataFrame to a Pandas DataFrame
+corr_pd = gold_ml.select(corr_cols).toPandas()
+corr_pd
+
+# COMMAND ----------
+
+# Calculate the correlation matrix
+corr_matrix = corr_pd.corr()
+corr_matrix
+
+# COMMAND ----------
+
+# Plot the correlation matrix as a heatmap
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+plt.figure(figsize=(10, 8))
+
+sns.heatmap(corr_matrix, annot=True, cmap="coolwarm", fmt= ".2f")
+plt.title("Correlation Matrix of Hospital Features")
+plt.show()
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC Hospital segmentation (K-Means clustering)
+
+# COMMAND ----------
+
+gold_ml.groupBy("ruca_bucket").agg(F.count("*").alias("Count")).show()
+
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC Key findings
 
 # COMMAND ----------
 
