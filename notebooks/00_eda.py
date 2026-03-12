@@ -1,7 +1,16 @@
 # Databricks notebook source
+# /// script
+# [tool.databricks.environment]
+# environment_version = "2"
+# ///
 # MAGIC %md
 # MAGIC ### Objective:
 # MAGIC * Explore the Gold ML feature table and generate project-ready insights/visuals.
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC # 1 Dataset overview
 
 # COMMAND ----------
 
@@ -20,12 +29,8 @@ print("gold_hosp rows:", gold_hosp.count)
 
 # COMMAND ----------
 
-# MAGIC %md
-# MAGIC Quick schema
-
-# COMMAND ----------
-
 # DBTITLE 1,Quick schema
+# Schema view for gold_ml
 gold_ml.printSchema()
 display(gold_ml.limit(20))
 
@@ -38,7 +43,7 @@ print("gold_ml unique facility ids: ",gold_ml.select("facility_id").distinct().c
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC Missing value summary
+# MAGIC # 2 Missingness analysis
 
 # COMMAND ----------
 
@@ -54,7 +59,7 @@ display(missing_df)
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC Transpose missing values table
+# MAGIC ## 2.1 Transpose missing values table
 # MAGIC * Column-wise summary of null counts and percentages
 
 # COMMAND ----------
@@ -96,6 +101,7 @@ display(
 # COMMAND ----------
 
 # MAGIC %md
+# MAGIC # 3 Summary analysis
 # MAGIC Summary statistics for key numeric features (Hospital info)
 
 # COMMAND ----------
@@ -132,8 +138,20 @@ display(gold_hosp.select(numeric_cols).summary())
 
 # COMMAND ----------
 
+# Show the summary statistics for the selected columns
+display(
+    gold_ml.select("excess_readmission_ratio").describe()
+)
+
+# COMMAND ----------
+
 # MAGIC %md
-# MAGIC State-level readmission summary
+# MAGIC # 4 Hospital readmission analysis
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 4.1 State level readmission analysis
 
 # COMMAND ----------
 
@@ -168,7 +186,43 @@ display(
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC Rural vs metro comparison
+# MAGIC ## 4.2 Hospital type readmission analysis
+
+# COMMAND ----------
+
+# Hospital type excess readmission ratio and pct high readmission summary
+display(
+    gold_ml.groupBy("hospital_type")
+    .agg(
+        F.count("*").alias("count"),
+        F.avg("excess_readmission_ratio").alias("avg_err"),
+        F.avg("high_readmission_flag").alias("pct_high_readmission")
+    )
+    .orderBy(F.desc("count"))
+)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 4.3 Hospital ownership readmission analysis
+
+# COMMAND ----------
+
+# hospital ownership excess readmission ratio and pct high readmission summary
+display(
+    gold_ml.groupBy("hospital_ownership")
+    .agg(
+        F.count("*").alias("count"),
+        F.avg("excess_readmission_ratio").alias("avg_err"),
+        F.avg("high_readmission_flag").alias("pct_high_readmission")
+    )
+    .orderBy(F.desc("count"))
+)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC # 5 Rural vs Metro comparison
 
 # COMMAND ----------
 
@@ -190,56 +244,120 @@ rural_summary.display()
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC Key categorical breakdown
-
-# COMMAND ----------
-
-# Hospital type excess readmission ratio and pct high readmission summary
-display(
-    gold_ml.groupBy("hospital_type")
-    .agg(
-        F.count("*").alias("count"),
-        F.avg("excess_readmission_ratio").alias("avg_err"),
-        F.avg("high_readmission_flag").alias("pct_high_readmission")
-    )
-    .orderBy(F.desc("count"))
-)
-
-# COMMAND ----------
-
-# hospital ownership excess readmission ratio and pct high readmission summary
-display(
-    gold_ml.groupBy("hospital_ownership")
-    .agg(
-        F.count("*").alias("count"),
-        F.avg("excess_readmission_ratio").alias("avg_err"),
-        F.avg("high_readmission_flag").alias("pct_high_readmission")
-    )
-    .orderBy(F.desc("count"))
-)
+# MAGIC # 6 Feature distributions & Skewness
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC Feature distributions
+# MAGIC ## 6.1 Univariate analysis
+# MAGIC * Histograms showing the distribution of key target/predictor variables;
+# MAGIC   * Excess Readmission Ratio
+# MAGIC   * MSPB Score Distribution
+# MAGIC   * Total Unplanned Patients
 
 # COMMAND ----------
 
+# Histogram of following features
 display(gold_ml.select("excess_readmission_ratio"))
 display(gold_ml.select("mspb_score"))
 display(gold_ml.select("total_unplanned_patients"))
 
 # COMMAND ----------
 
-# Show the summary statistics for the selected columns
-display(
-    gold_ml.select("excess_readmission_ratio").describe()
+# MAGIC %md
+# MAGIC ## 6.2 Hospital Rating Performance by Rurality
+# MAGIC * Average excess readmission ratio grouped by star rating and rural/urban classification. Reveals if low-rated rural hospitals underperform.
+
+# COMMAND ----------
+
+# 
+rating_summary = (
+    gold_ml.groupBy("hospital_overall_rating", "ruca_bucket")
+    .agg(
+        F.count("*").alias("rows"),
+        F.avg("excess_readmission_ratio").alias("avg_excess_readmit_ratio")
+    )
+    .orderBy("hospital_overall_rating", "ruca_bucket")
 )
+
+display(rating_summary)
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC Correlation analysis
+# MAGIC ## 6.3 Skewness assessment
+
+# COMMAND ----------
+
+# DBTITLE 1,Skewness for gold_ml numeric features
+from pyspark.sql.functions import skewness
+
+gold_ml_skewness = gold_ml.select(
+    skewness("predicted_readmission_rate").alias("predicted_readmission_rate"),
+    skewness("expected_readmission_rate").alias("expected_readmission_rate"),
+    skewness("excess_readmission_ratio").alias("excess_readmission_ratio"),
+    skewness("hospital_overall_rating").alias("hospital_overall_rating"),
+    skewness("mspb_score").alias("mspb_score"),
+    skewness("avg_unplanned_score").alias("avg_unplanned_score"),
+    skewness("total_unplanned_patients").alias("total_unplanned_patients"),
+    skewness("unplanned_return_rate").alias("unplanned_return_rate"),
+    skewness("readmission_gap").alias("readmission_gap")
+)
+
+display(gold_ml_skewness)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC # 7 Categorical & Segment Analysis
+
+# COMMAND ----------
+
+gold_hosp.select(F.col("ruca_code")).distinct().display()
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 7.1 Bivariate visualization
+# MAGIC * Comparative Analysis (Scatter Plot using Pandas & Matplotlib + Jitter)
+# MAGIC     * Jitter helps to distinguish discrete values by adding a tiny random horizontal offset.
+
+# COMMAND ----------
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+corr_plot_pd = gold_ml.select(F.col("excess_readmission_ratio"),
+                              F.col("hospital_overall_rating")).toPandas()
+
+
+plot_df = corr_plot_pd.copy()
+plot_df["hospital_rating_jitter"] = plot_df["hospital_overall_rating"] + np.random.uniform(-0.08, 0.08, len(plot_df))
+
+plt.figure(figsize=(10, 6))
+plt.scatter(
+    plot_df["hospital_rating_jitter"],
+    plot_df["excess_readmission_ratio"],
+    alpha=0.35
+)
+
+plt.xlabel("Hospital Rating")
+plt.ylabel("Excess Readmission Ratio")
+plt.title("Hospital Rating vs Excess Readmission Ratio")
+plt.show()
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC Relationship Between Hospital Rating and Readmission Burden
+# MAGIC
+# MAGIC Hospitals with higher CMS overall ratings tend to exhibit lower excess readmission ratios.
+# MAGIC Average readmission ratios decline steadily from rating 1 hospitals to rating 5 hospitals, suggesting that hospitals with stronger overall performance also demonstrate better readmission outcomes.
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC # 8 Correlation analysis
 
 # COMMAND ----------
 
@@ -250,6 +368,12 @@ display(
 # MAGIC We remove following features from correlation analysis;
 # MAGIC * Observed_readmission_rate -> 56% missing.
 # MAGIC * Ruca_bucket -> This is a geographic classification code, not a continuous measure.
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 8.1 Pearson Correlation Matrix
+# MAGIC * We use a custom PySpark SQL implementation to bypass environment-specific security restrictions.
 
 # COMMAND ----------
 
@@ -308,36 +432,13 @@ for c in corr_cols:
 
 # COMMAND ----------
 
-# MAGIC %md
-# MAGIC Skewness for hospital variables
-
-# COMMAND ----------
-
-# DBTITLE 1,Skewness for gold_ml numeric features
-from pyspark.sql.functions import skewness
-
-gold_ml_skewness = gold_ml.select(
-    skewness("predicted_readmission_rate").alias("predicted_readmission_rate"),
-    skewness("expected_readmission_rate").alias("expected_readmission_rate"),
-    skewness("excess_readmission_ratio").alias("excess_readmission_ratio"),
-    skewness("hospital_overall_rating").alias("hospital_overall_rating"),
-    skewness("mspb_score").alias("mspb_score"),
-    skewness("avg_unplanned_score").alias("avg_unplanned_score"),
-    skewness("total_unplanned_patients").alias("total_unplanned_patients"),
-    skewness("unplanned_return_rate").alias("unplanned_return_rate"),
-    skewness("readmission_gap").alias("readmission_gap")
-)
-
-display(gold_ml_skewness)
-
-# COMMAND ----------
-
 gold_hosp.columns
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC Correlation analysis using pandas and seaborn - Heatmap 
+# MAGIC ## 8.2 Correlation Heatmap
+# MAGIC * Correlation analysis using pandas and seaborn - Heatmap 
 
 # COMMAND ----------
 
@@ -379,17 +480,192 @@ plt.show()
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC Hospital segmentation (K-Means clustering)
+# MAGIC # 9 Unsupervised Learning: Hospital Segmentaion
 
 # COMMAND ----------
 
-gold_ml.groupBy("ruca_bucket").agg(F.count("*").alias("Count")).show()
+# MAGIC %md
+# MAGIC ## 9.1 Feature Selection
+# MAGIC
+# MAGIC Used operational hospital metrics that capture utilization, cost, and outcomes.
+# MAGIC
+# MAGIC **Note:** Rows with missing values in the clustering features were excluded before fitting the K-Means model. In this dataset, gaps in CMS readmission measures come from how the metrics are defined and reported, not from random data loss, so imputing them could create artificial patterns and distort the resulting clusters.
+
+# COMMAND ----------
+
+# Setup clustering features and drop null values
+from pyspark.sql import functions as F
+
+cluster_features = [
+    "excess_readmission_ratio",
+    "mspb_score",
+    "total_unplanned_patients",
+    "unplanned_return_rate",
+    "hospital_overall_rating",
+    "avg_unplanned_score"
+]
+
+cluster_df = (
+  gold_ml
+  .select(*cluster_features)
+  .dropna()
+)
+
+print("Rows used for clustering:", {cluster_df.count()},"\n")
+display(cluster_df.limit(10))
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 9.2 Assemble Feature Vector
+# MAGIC * Using array_to_vector instead of VectorAssembler function as work around due to the strict Security Whitelisting policies of Databricks Serverless compute.
+
+# COMMAND ----------
+
+# Create a vector column from the selected features
+from pyspark.ml.functions import array_to_vector
+
+cluster_df_vector = (
+  cluster_df
+  .withColumn(
+    "features_vector",
+    array_to_vector(F.array(*[F.col(c) for c in cluster_features]))
+  )
+)
+
+
+display(cluster_df_vector.select("features_vector"). limit(10))
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 9.3 Feature scaling
+# MAGIC * Perform manual scaling instead of ml.feature's StandardScaler due to white listing policy restrictions.
+
+# COMMAND ----------
+
+# Create vector column from the selected features
+from pyspark.ml.functions import array_to_vector
+
+cluster_features = [
+    "excess_readmission_ratio",
+    "mspb_score",
+    "total_unplanned_patients",
+    "unplanned_return_rate",
+    "hospital_overall_rating",
+    "avg_unplanned_score"
+]
+
+cluster_df = gold_ml.select(*cluster_features).dropna()
+
+stats = cluster_df.select([
+  F.mean(c).alias(f"{c}_mean") for c in cluster_features
+] + [
+F.stddev(c).alias(f"{c}_std") for c in cluster_features
+]
+).collect()[0].asDict()
+
+display(stats)
+
+
+# COMMAND ----------
+
+# Scale the features using the mean and standard deviation
+scaled_df = cluster_df
+
+for c in cluster_features:
+  mean_val = stats[f"{c}_mean"]
+  std_val = stats[f"{c}_std"]
+  scaled_df = scaled_df.withColumn(f"{c}_scaled", 
+                                   (F.col(c)-F.lit(mean_val))/F.lit(std_val))
+  
+  scaled_cols = [f"{c}_scaled" for c in cluster_features]
+
+  df_scaled = (
+    scaled_df.withColumn(
+      "features_vector",
+      array_to_vector(F.array(*[F.col(c) for c in scaled_cols])
+    )
+  ))
+
+display(df_scaled.select("features_vector").limit(10))
 
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC Key findings
+# MAGIC ##  9.4 Optimal Cluster Selection
+# MAGIC * Prepare clustering data in Pandas due to white listing policy restrictions.
+
+# COMMAND ----------
+
+# DBTITLE 1,KMeans optimal cluster evaluation and visualization
+# Convert the Spark DataFrame to a Pandas DataFrame with selected features
+cluster_features = [
+    "excess_readmission_ratio",
+    "mspb_score",
+    "total_unplanned_patients",
+    "unplanned_return_rate",
+    "hospital_overall_rating",
+    "avg_unplanned_score"
+]
+
+cluster_pd = gold_ml.select(*cluster_features).dropna().toPandas()
+
+print("Rows used for clustering:", len(cluster_pd))
+cluster_pd.head()
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### 9.4.1 Standardize features with sklearn
+
+# COMMAND ----------
+
+from sklearn.preprocessing import StandardScaler
+
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(cluster_pd[cluster_features])
+
+
+# COMMAND ----------
+
+print(display(X_scaled.shape))
+print(display(X_scaled[:5]))
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### 9.4.2 Elbow Method
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC # 10 Key findings
+
+# COMMAND ----------
+
+
 
 # COMMAND ----------
 
