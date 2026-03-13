@@ -4,13 +4,26 @@
 # environment_version = "2"
 # ///
 # MAGIC %md
-# MAGIC ### Objective:
-# MAGIC * Explore the Gold ML feature table and generate project-ready insights/visuals.
+# MAGIC
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC # 1 Dataset overview
+# MAGIC # Exploratory Data Analysis: CMS Hospital Performance
+# MAGIC
+# MAGIC This notebook explores CMS hospital quality and utilization data prepared in the Gold layer of the lakehouse pipeline. The analysis investigates patterns in hospital performance, readmission behavior, patient volume, and spending metrics. The goal is to identify meaningful relationships in the data and prepare features for downstream machine learning models that predict hospital readmission risk.
+# MAGIC
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### Objective:
+# MAGIC * Explore the Gold ML feature table and perform exploratory data analysis to identify patterns in hospital performance, readmission behavior, patient utilization, and cost metrics. The analysis generates project-ready insights and visualizations that support downstream machine learning modeling.
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC # 1 Dataset Overview
 
 # COMMAND ----------
 
@@ -43,7 +56,7 @@ print("gold_ml unique facility ids: ",gold_ml.select("facility_id").distinct().c
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC # 2 Missingness analysis
+# MAGIC # 2 Missingness Analysis
 
 # COMMAND ----------
 
@@ -59,7 +72,7 @@ display(missing_df)
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 2.1 Transpose missing values table
+# MAGIC ## 2.1 Transpose Missing Values Table
 # MAGIC * Column-wise summary of null counts and percentages
 
 # COMMAND ----------
@@ -101,12 +114,11 @@ display(
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC # 3 Summary analysis
+# MAGIC # 3 Summary Analysis
 # MAGIC Summary statistics for key numeric features (Hospital info)
 
 # COMMAND ----------
 
-# DBTITLE 1,Identify numeric columns in gold_hosp
 # 1. Identify numeric columns using list comprehension of hospital_features
 numeric_cols = [(c, t) for c, t in gold_hosp.dtypes if t in ('int', 'double', 'bigint', 'float')]
 
@@ -146,12 +158,12 @@ display(
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC # 4 Hospital readmission analysis
+# MAGIC # 4 Hospital Readmission Analysis
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 4.1 State level readmission analysis
+# MAGIC ## 4.1 State Level Readmission Analysis
 
 # COMMAND ----------
 
@@ -186,7 +198,7 @@ display(
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 4.2 Hospital type readmission analysis
+# MAGIC ## 4.2 Hospital Type Readmission Analysis
 
 # COMMAND ----------
 
@@ -204,7 +216,7 @@ display(
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 4.3 Hospital ownership readmission analysis
+# MAGIC ## 4.3 Hospital Ownership Readmission Analysis
 
 # COMMAND ----------
 
@@ -222,7 +234,7 @@ display(
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC # 5 Rural vs Metro comparison
+# MAGIC # 5 Rural vs Metro Comparison
 
 # COMMAND ----------
 
@@ -244,12 +256,12 @@ rural_summary.display()
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC # 6 Feature distributions & Skewness
+# MAGIC # 6 Feature Distributions & Skewness
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 6.1 Univariate analysis
+# MAGIC ## 6.1 Univariate Analysis
 # MAGIC * Histograms showing the distribution of key target/predictor variables;
 # MAGIC   * Excess Readmission Ratio
 # MAGIC   * MSPB Score Distribution
@@ -285,11 +297,11 @@ display(rating_summary)
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 6.3 Skewness assessment
+# MAGIC ## 6.3 Skewness Assessment
 
 # COMMAND ----------
 
-# DBTITLE 1,Skewness for gold_ml numeric features
+# Skewness for gold_ml numeric features
 from pyspark.sql.functions import skewness
 
 gold_ml_skewness = gold_ml.select(
@@ -318,7 +330,7 @@ gold_hosp.select(F.col("ruca_code")).distinct().display()
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 7.1 Bivariate visualization
+# MAGIC ## 7.1 Bivariate Visualization
 # MAGIC * Comparative Analysis (Scatter Plot using Pandas & Matplotlib + Jitter)
 # MAGIC     * Jitter helps to distinguish discrete values by adding a tiny random horizontal offset.
 
@@ -349,7 +361,7 @@ plt.show()
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC Relationship Between Hospital Rating and Readmission Burden
+# MAGIC **7.1 Output:** Relationship Between Hospital Rating and Readmission Burden
 # MAGIC
 # MAGIC Hospitals with higher CMS overall ratings tend to exhibit lower excess readmission ratios.
 # MAGIC Average readmission ratios decline steadily from rating 1 hospitals to rating 5 hospitals, suggesting that hospitals with stronger overall performance also demonstrate better readmission outcomes.
@@ -357,7 +369,7 @@ plt.show()
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC # 8 Correlation analysis
+# MAGIC # 8 Correlation Analysis
 
 # COMMAND ----------
 
@@ -377,7 +389,6 @@ plt.show()
 
 # COMMAND ----------
 
-# DBTITLE 1,Feature distributions null counts
 # Check for null values in the selected columns
 corr_cols = [
     "number_of_discharges",
@@ -539,7 +550,7 @@ display(cluster_df_vector.select("features_vector"). limit(10))
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 9.3 Feature scaling
+# MAGIC ## 9.3 Feature Scaling
 # MAGIC * Perform manual scaling instead of ml.feature's StandardScaler due to white listing policy restrictions.
 
 # COMMAND ----------
@@ -599,7 +610,6 @@ display(df_scaled.select("features_vector").limit(10))
 
 # COMMAND ----------
 
-# DBTITLE 1,KMeans optimal cluster evaluation and visualization
 # Convert the Spark DataFrame to a Pandas DataFrame with selected features
 cluster_features = [
     "excess_readmission_ratio",
@@ -610,6 +620,8 @@ cluster_features = [
     "avg_unplanned_score"
 ]
 
+# Convert the Spark DataFrame to a Pandas DataFrame with selected features
+# NAs are dropped
 cluster_pd = gold_ml.select(*cluster_features).dropna().toPandas()
 
 print("Rows used for clustering:", len(cluster_pd))
@@ -618,7 +630,7 @@ cluster_pd.head()
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### 9.4.1 Standardize features with sklearn
+# MAGIC ### 9.4.1 Standardize Features with Sklearn
 
 # COMMAND ----------
 
@@ -640,19 +652,293 @@ print(display(X_scaled[:5]))
 
 # COMMAND ----------
 
+from sklearn.cluster import KMeans
+import matplotlib.pyplot as plt
+
+k_values = list(range(2, 11))
+inertia_values = []
+
+for k in k_values:
+    kmeans = KMeans(n_clusters= k, random_state= 42, n_init= 10)
+    kmeans.fit(X_scaled)
+    inertia_values.append(kmeans.inertia_)
+
+plt.figure(figsize= (8,6))
+plt.plot(k_values, inertia_values, marker= 'o')
+plt.xlabel('Number of Clusters (k)')
+plt.ylabel('Inertia')
+plt.title('Elbow Method for Optimal k')
+plt.show()
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC **9.4.2 Output:** The elbow method was used to determine the optimal number of clusters by examining the within-cluster sum of squares (Inertia) across different values of k. The curve shows a sharp decrease in inertia up to approximately k = 5, after which the rate of improvement diminishes significantly. Therefore, k = 5 was selected as the optimal number of clusters for hospital segmentation.
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### 9.4.3 Silhoutte Score
+
+# COMMAND ----------
+
+from sklearn.metrics import silhouette_score
+
+silhouette_score_list = []
+
+for k in range(2, 11):
+    kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+    labels = kmeans.fit_predict(X_scaled)
+    score = silhouette_score(X_scaled, labels)
+    silhouette_score_list.append(silhouette_score(X_scaled, kmeans.labels_))
+
+
+plt.figure(figsize=(8, 6))
+plt.plot(range(2, 11), silhouette_score_list, marker='o')
+plt.xlabel('Number of Clusters (k)')
+plt.ylabel('Silhouette Score')
+plt.title('Silhouette Score vs Number of Clusters')
+plt.show()
+
+print("Silhouette Score`", list(silhouette_score_list))
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC **9.4.3 Output:** The optimal number of clusters was determined using both the elbow method and silhouette analysis. The elbow plot flattened out around 5–6 clusters, meaning that adding more clusters after that only slightly reduced the within‑cluster variation.
+# MAGIC
+# MAGIC The silhouette score peaked at 2 clusters, which is typical but would split hospitals into segments that are too broad to be useful. After 3 clusters, the silhouette scores were fairly similar, indicating that cohesion did not change much as we increased k.
+# MAGIC
+# MAGIC Balancing these metrics with how interpretable the hospital segments are, we chose 5 clusters as the final solution.
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 9.5 K-Means Model
+
+# COMMAND ----------
+
+cluster_pd.columns
+
+# COMMAND ----------
+
+best_k = 5
+
+kmeans_final = KMeans(n_clusters=best_k, random_state=42, n_init=10)
+cluster_pd["cluster"] = kmeans_final.fit_predict(X_scaled)
+
+cluster_pd[["cluster"] + cluster_features].head()
+
+# COMMAND ----------
+
+# Reminder cluster_features checked
+cluster_features
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### 9.5.1 Cluster Counts and Cluster Distribution Plot
+
+# COMMAND ----------
+
+# Value counts of clusters
+
+cluster_counts = (
+  cluster_pd["cluster"]
+  .value_counts()
+  .sort_index()
+  .reset_index()
+)
+
+cluster_counts.columns = ["cluster", "count"]
+
+cluster_counts
+
+# COMMAND ----------
+
+plt.figure(figsize=(8, 6))
+plt.bar(cluster_counts["cluster"], cluster_counts["count"])
+plt.xlabel("Cluster")
+plt.ylabel("Count")
+plt.title("Hospital Cluster Distribution")
+plt.show()
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 9.6 Cluster Profiles
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### 9.6.1 Cluster Profiles Tables
+
+# COMMAND ----------
+
+cluster_profiles = (
+    cluster_pd
+    .groupby("cluster")[cluster_features]
+    .mean()
+    .reset_index()
+    .sort_values("cluster")
+)
+
+cluster_profiles
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### 9.6.2 Cluster Individual Profile Plots
+
+# COMMAND ----------
+
+# Plot cluster profiles
+
+for feature in cluster_features:
+    plt.figure(figsize=(8, 6))
+    plt.bar(cluster_profiles["cluster"], cluster_profiles[feature])
+    plt.xlabel("Cluster")
+    plt.ylabel(feature)
+    plt.title(f"Cluster Profile: {feature}")
+    plt.show()
 
 
 # COMMAND ----------
 
-
+# MAGIC %md
+# MAGIC **9.6.2 Output:** Cluster Interpretation
+# MAGIC
+# MAGIC K-Means clustering produced five hospital segments. Since clustering algorithms assign numeric cluster IDs without inherent meaning, descriptive labels were derived by examining the average feature values within each cluster, including patient volume, readmission metrics, spending indicators, and hospital quality ratings.
+# MAGIC
+# MAGIC Based on the cluster profile analysis, the following hospital segments were identified:
+# MAGIC
+# MAGIC **Cluster 0 — Large Metropolitan Hospitals**
+# MAGIC * Very high patient volume
+# MAGIC * Good hospital ratings (~3.6)
+# MAGIC * Moderate readmission ratios
+# MAGIC
+# MAGIC These hospitals likely represent large urban facilities handling high patient throughput.
+# MAGIC
+# MAGIC ---
+# MAGIC
+# MAGIC **Cluster 1 — Typical Community Hospitals**
+# MAGIC * Medium patient volume
+# MAGIC * Moderate hospital ratings (~3.2)
+# MAGIC * Slightly elevated unplanned return rates
+# MAGIC
+# MAGIC This segment represents average regional hospitals with typical operational performance.
+# MAGIC
+# MAGIC ---
+# MAGIC
+# MAGIC **Cluster 2 — Underperforming Hospitals**
+# MAGIC * Lowest hospital ratings
+# MAGIC * Highest readmission ratios
+# MAGIC * Highest unplanned return rates
+# MAGIC
+# MAGIC Hospitals in this cluster show the weakest performance across key readmission indicators.
+# MAGIC
+# MAGIC ---
+# MAGIC
+# MAGIC **Cluster 3 — Higher-Cost Hospitals**
+# MAGIC * Highest Medicare Spending per Beneficiary (MSPB)
+# MAGIC * Moderate readmission ratios
+# MAGIC * Lower hospital ratings
+# MAGIC
+# MAGIC These hospitals appear to have higher spending levels relative to outcomes.
+# MAGIC
+# MAGIC ---
+# MAGIC
+# MAGIC **Cluster 4 — High-Quality Hospitals**
+# MAGIC * Highest hospital ratings
+# MAGIC * Lowest readmission ratios
+# MAGIC * Lowest unplanned return rates
+# MAGIC
+# MAGIC This cluster represents the strongest-performing hospitals across the analyzed quality metrics.
 
 # COMMAND ----------
 
-
+# MAGIC %md
+# MAGIC ### 9.6.2.1
 
 # COMMAND ----------
 
+# MAGIC %md
+# MAGIC ## 9.7 PCA Visualization
+# MAGIC
+# MAGIC Principal Component Analysis (PCA) was applied to reduce the dimensionality of the clustering feature space while preserving the majority of variance. Two principal components were selected for visualization purposes, allowing cluster separation to be visualized in two-dimensional space while retaining most of the underlying data variability.
 
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### 9.7.1 Finding Best PCA Components
+
+# COMMAND ----------
+
+from sklearn.decomposition import PCA
+import numpy as np
+import matplotlib.pyplot as plt
+
+pca = PCA()
+pca.fit(X_scaled)
+
+explained_variance = pca.explained_variance_ratio_
+cumulative_variance = np.cumsum(explained_variance)
+
+print("Explained variance per component:")
+print(explained_variance)
+
+print("\nCumulative variance:")
+print(cumulative_variance)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC **9.7.1 Output:** Principal Component Analysis (PCA) was used to examine how much variance each component captures from the clustering feature set.
+# MAGIC
+# MAGIC The first two principal components explain approximately **54.5% of the total variance**, while the first four components explain approximately **82.9% of the variance**.
+# MAGIC
+# MAGIC Although additional components capture more information, **two components were selected for visualization purposes**, allowing the cluster structure to be visualized in two-dimensional space.
+# MAGIC
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC #### 9.7.1.1 Scree Plot
+# MAGIC This plot helps with ncomponent cutoff or highest variance.
+
+# COMMAND ----------
+
+plt.figure(figsize=(8,5))
+
+plt.plot(range(1, len(explained_variance)+1),
+         cumulative_variance,
+         marker='o')
+
+plt.xlabel("Number of Components")
+plt.ylabel("Cumulative Explained Variance")
+plt.title("PCA Explained Variance")
+
+plt.axhline(y=0.80, color='r', linestyle='--')
+plt.axhline(y=0.90, color='g', linestyle='--')
+
+plt.show()
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC #### 9.7.1.2 PCA Component Analysis
+
+# COMMAND ----------
+
+# View the pca components of the features in a dataframe
+import pandas as pd
+
+loadings = pd.DataFrame(
+    pca.components_,
+    columns=cluster_features
+)
+
+loadings
 
 # COMMAND ----------
 
@@ -661,17 +947,92 @@ print(display(X_scaled[:5]))
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC # 10 Key findings
+# MAGIC ### 9.7.2 PCA Plot  
 
 # COMMAND ----------
 
-
+# Check the first 2 rows of the dataframe
+cluster_pd.head(2)
 
 # COMMAND ----------
 
+from sklearn.decomposition import PCA
+import seaborn as sns
+
+pca = PCA(n_components=2, random_state= 42)
+X_scaled_pca = pca.fit_transform(X_scaled)
+
+cluster_pd["pc1"] = X_scaled_pca[:, 0]
+cluster_pd["pc2"] = X_scaled[:,1]
+
+plt.figure(figsize=(8,6))
+sns.scatterplot(
+    data=cluster_pd,
+    x="pc1",
+    y="pc2",
+    hue="cluster",
+    palette="tab10",
+    alpha=0.7
+)
+
+plt.title("Hospital Clusters (PCA Projection)")
+plt.xlabel("Principal Component 1")
+plt.ylabel("Principal Component 2")
+plt.show()
 
 
 # COMMAND ----------
 
 # MAGIC %md
+# MAGIC **9.7.2 Output:** PCA Visualization of Hospital Clusters
+# MAGIC * To better visualize the clustering results, Principal Component Analysis (PCA) was applied to reduce the feature space into two dimensions. This allows the hospital clusters identified by the K-Means model to be plotted and visually inspected.
+# MAGIC The first two principal components explain approximately **54.5% of the total variance** in the dataset. While this does not capture all of the variance, it is sufficient to provide a meaningful two-dimensional representation of the hospital feature space.
+# MAGIC * From the PCA projection, the clusters show identifiable patterns in how hospitals group together based on operational characteristics such as patient volume, readmission behavior, spending metrics, and overall hospital ratings. Some overlap between clusters is expected given the complexity of healthcare systems and the similarity of certain hospital profiles.
+# MAGIC
+# MAGIC Overall, the visualization supports the earlier cluster profiling results and helps illustrate how different hospital segments relate to one another in the feature space.
+# MAGIC
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC # 10 Key Findings
+# MAGIC
+# MAGIC The exploratory analysis of CMS hospital data reveals several meaningful patterns related to hospital performance, readmission behavior, patient volume, and cost structures.
+# MAGIC
+# MAGIC ### 1. Hospital Ratings and Readmission Performance
+# MAGIC Hospitals with higher overall ratings generally show lower excess readmission ratios. While the relationship is not perfectly linear, the distribution indicates that higher-rated hospitals tend to manage patient outcomes more effectively, resulting in fewer readmissions relative to expected levels.
+# MAGIC
+# MAGIC ### 2. Rural vs Metropolitan Differences
+# MAGIC Hospitals located in rural areas tend to have lower patient volumes compared to metropolitan hospitals. Rural hospitals also show greater variability in readmission performance, which may reflect differences in available resources, patient demographics, and healthcare accessibility.
+# MAGIC
+# MAGIC ### 3. Patient Volume Patterns
+# MAGIC Large metropolitan hospitals handle significantly higher patient volumes, particularly in unplanned patient visits. However, higher patient volume does not necessarily translate to better performance, as some high-volume hospitals still exhibit elevated readmission ratios.
+# MAGIC
+# MAGIC ### 4. Cost and Utilization
+# MAGIC The Medicare Spending per Beneficiary (MSPB) metric varies across hospitals and clusters. Some hospitals show relatively high spending without corresponding improvements in readmission outcomes, suggesting possible inefficiencies in healthcare delivery.
+# MAGIC
+# MAGIC ### 5. Hospital Segmentation
+# MAGIC Using K-Means clustering, hospitals can be grouped into several distinct operational profiles. These clusters reflect differences in patient volume, hospital quality ratings, spending patterns, and readmission behavior.
+# MAGIC
+# MAGIC The clustering analysis identified five general hospital segments:
+# MAGIC
+# MAGIC • **Large metropolitan hospitals** – high patient volume with moderate readmission levels  
+# MAGIC • **Typical community hospitals** – medium patient volume with average performance  
+# MAGIC • **Underperforming hospitals** – lower ratings with higher readmission ratios  
+# MAGIC • **Higher-cost hospitals** – elevated spending levels with moderate outcomes  
+# MAGIC • **High-quality hospitals** – strong ratings with relatively low readmission rates  
+# MAGIC
+# MAGIC ### 6. Cluster Visualization
+# MAGIC Principal Component Analysis (PCA) was used to project the hospital feature space into two dimensions. The PCA visualization confirms that the clusters represent meaningful groupings of hospital characteristics, although some overlap exists due to similarities among certain hospital profiles.
+# MAGIC
+# MAGIC ### 7. Implications for Modeling
+# MAGIC These exploratory findings highlight several variables that may be useful predictors in downstream modeling tasks, including:
+# MAGIC
+# MAGIC - hospital overall rating
+# MAGIC - MSPB spending score
+# MAGIC - patient volume indicators
+# MAGIC - unplanned return rate
+# MAGIC - rural vs metropolitan classification
+# MAGIC
+# MAGIC These features will be used in the next stage of the project to build predictive models for hospital readmission performance.
 # MAGIC
