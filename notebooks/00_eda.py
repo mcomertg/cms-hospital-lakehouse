@@ -167,6 +167,11 @@ display(
 
 # COMMAND ----------
 
+# MAGIC %md
+# MAGIC ### 4.1.1 State Readmission Summary Table
+
+# COMMAND ----------
+
 # State level readmission summary
 state_summary = (
     gold_ml.groupBy("state")
@@ -194,6 +199,130 @@ display(
     .orderBy(F.desc("avg_excess_ratio"))
     .limit(10)
 )
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### 4.1.2 Choropleth Map: Readmission Ratio by State
+# MAGIC To better understand geographic variation in hospital performance, a choropleth map was created using the average excess readmission ratio by state. This visualization highlights regional differences in hospital readmission burden across the United States.
+
+# COMMAND ----------
+
+# view the columns for the gold_ml spark DataFrame
+gold_ml.columns
+
+# COMMAND ----------
+
+gold_ml.describe
+
+# COMMAND ----------
+
+import pyspark.sql.functions as F
+# Create a DataFrame with state and average excess readmission ratio
+state_df = (
+    gold_ml
+    .groupBy("state")
+    .agg(
+        F.avg("excess_readmission_ratio").alias("avg_excess_readmission_ratio"),
+        F.count("*").alias("hospital_count")
+    )
+)
+
+display(state_df)
+
+# COMMAND ----------
+
+# Convert the state_df to a pandas DataFrame
+state_pd = state_df.toPandas()
+
+# Create Choropleth map using plotly express
+import plotly.express as px
+
+fig = px.choropleth(
+    state_pd,
+    locations="state",
+    locationmode="USA-states",
+    color="avg_excess_readmission_ratio",
+    scope="usa",
+    color_continuous_scale="Viridis",
+    hover_name="state",
+    hover_data=["avg_excess_readmission_ratio"],
+    labels={"avg_excess_readmission_ratio":"Avg Excess Readmission Ratio"},
+    title="Average Excess Readmission Ratio by State"
+)
+
+# Add state labels to the map using scattergeo
+fig.add_scattergeo(
+    locations=state_pd["state"],
+    locationmode="USA-states",
+    text=state_pd["state"],
+    mode="text",
+    hoverinfo='skip',
+    showlegend=False
+)
+
+fig.show()
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC **4.1.2 Choropleth Map Output:** The state-level maps show that hospital readmission performance varies across the United States. Some states have average excess readmission ratios above 1.0, indicating higher readmission burden relative to expectations, while others fall below 1.0. 
+# MAGIC
+# MAGIC **Note:** The bubble map also shows that states differ substantially in hospital count, which is important when interpreting the stability of state averages.
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### 4.1.3 Bubble Map: Hospital Readmission Ratio with Hospital Count by State
+# MAGIC A complementary bubble map was also created to add context to the state-level readmission analysis. In this view, color represents the average excess readmission ratio and bubble size represents the number of hospitals contributing to each state’s average. This helps distinguish between states with broader hospital representation and states with relatively fewer observations.
+
+# COMMAND ----------
+
+# Create bubble map using plotly express for hospital count and excess readmission ratio by state
+import plotly.express as px
+
+fig = px.scatter_geo(
+    state_pd,
+    locations="state",
+    locationmode="USA-states",
+    size="hospital_count",
+    color="avg_excess_readmission_ratio",
+    scope="usa",
+    color_continuous_scale="Viridis",
+    size_max=28,   # slightly larger bubbles
+    hover_name="state",
+    hover_data={
+        "hospital_count": True,
+        "avg_excess_readmission_ratio": ":.3f"
+    },
+    title="Hospital Readmission Ratio with Hospital Count by State"
+)
+
+# Map appearance improvements
+fig.update_geos(
+    showcountries=False,
+    showcoastlines=False,
+    showland=True,
+    landcolor="rgb(235, 235, 235)",
+    lakecolor="white"
+)
+
+# Layout improvements
+fig.update_layout(
+    title_x=0.5,  # center title
+    margin={"r":0,"t":50,"l":0,"b":0}
+)
+
+fig.show()
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC **4.1.3 Bubble Map Output:** The bubble map adds additional context to the state-level readmission analysis by incorporating hospital count into the visualization. While color represents the **average excess readmission ratio**, the bubble size indicates **how many hospitals** contributed to the state-level average.
+# MAGIC
+# MAGIC States with larger bubbles represent regions with a higher number of hospitals in the dataset, meaning the calculated averages are based on a broader sample of facilities. Conversely, smaller bubbles indicate states with fewer hospitals, where the average readmission ratio may be influenced by a smaller number of observations.
+# MAGIC
+# MAGIC This visualization helps interpret the reliability of the state-level averages and highlights states with both high readmission ratios and large hospital representation.
 
 # COMMAND ----------
 
