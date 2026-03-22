@@ -1,0 +1,9 @@
+pandas
+numpy
+scikit-learn
+matplotlib
+seaborn
+plotly
+pyspark
+
+# mlflow (optional) - not supported in Databricks Free Edition environment

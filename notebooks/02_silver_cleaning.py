@@ -451,7 +451,6 @@ bad_unpl_rows = quarantine_rows(unplanned_visits_silver, F.col("facility_id").is
 
 # COMMAND ----------
 
-# DBTITLE 1,Cell 33
 # validate quarantine counts
 print("Quarantined rows:",
       {"hrrp_null": bad_hrrp_rows,
@@ -466,7 +465,6 @@ print("Quarantined rows:",
 
 # COMMAND ----------
 
-# DBTITLE 1,Cell 35
 # Write cleaned data to silver tables
 write_delta_overwrite(hrrp_silver, f"{SILVER}/hrrp_clean")
 write_delta_overwrite(hosp_silver, f"{SILVER}/hospital_info_clean")
@@ -493,7 +491,16 @@ print("Unplanned distinct facility_id:", unplanned_visits_silver.select("facilit
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ##### Validation / Join Key Sanity Checks/ Debugging
+# MAGIC ### Data Quality Validation Tables
+# MAGIC
+# MAGIC Several intermediate overlap datasets were created during the Silver layer to validate joins between CMS datasets and detect duplicate or overlapping hospital records.
+# MAGIC
+# MAGIC Examples include:
+# MAGIC - hrrp_unplanned_overlap
+# MAGIC - hrrp_mspb_overlap
+# MAGIC - hrrp_hosp_overlap
+# MAGIC
+# MAGIC These tables were used for diagnostic and validation purposes during pipeline development and are not part of the final feature pipeline.
 
 # COMMAND ----------
 
