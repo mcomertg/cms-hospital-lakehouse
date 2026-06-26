@@ -110,7 +110,7 @@ These variables are derived from CMS methodologies and are closely related to th
 ### Choropleth Map – Readmission Ratio by State
 This map highlights geographic variation in hospital readmission performance across states.
 
-![Choropleth Map](screenshots/choropleth_Map.png)
+![Choropleth Map](screenshots/Choropleth_Map.png)
 
 ---
 
