@@ -168,9 +168,9 @@ cms-hospital-lakehouse/
 ├── notebooks/
 │ ├── 00_eda
 │ ├── 00_eda_demo
-│ ├── 01_silver_layer
-│ ├── 02_gold_layer
-│ ├── 03_clustering_pca
+│ ├── 01_bronze_ingestion
+│ ├── 02_silver_layer
+│ ├── 03_gold_feature_table
 │ ├── 04_ml_modeling
 │ ├── 04_ml_modeling_demo
 |
